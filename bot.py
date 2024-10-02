@@ -28,6 +28,9 @@ def init_db():
             answer TEXT
         )
     """)
+    # Добавляем ответы на частые вопросы в базу данных
+    cursor.execute("INSERT INTO faq (question, answer) VALUES ('Какой пакет документов?', 'Для отгрузки товаров вам понадобятся накладная, товарный чек и сертификаты соответствия.')")
+    cursor.execute("INSERT INTO faq (question, answer) VALUES ('Где найти накладную на паллеты?', 'Накладная обычно находится в вашей учетной системе или может быть запрошена у вашего менеджера.')")
     conn.commit()
     conn.close()
 
@@ -67,6 +70,21 @@ def show_frequent_questions(message):
     back_button = types.KeyboardButton('Назад')
     markup.add(itembtn1, itembtn2, back_button)
     bot.send_message(message.chat.id, "Выберите вопрос:", reply_markup=markup)
+
+# Ответ на частый вопрос
+@bot.message_handler(func=lambda message: message.text in ['Какой пакет документов?', 'Где найти накладную на паллеты?'])
+def answer_faq(message):
+    question = message.text
+    conn = sqlite3.connect('nestle_bot.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT answer FROM faq WHERE question = ?", (question,))
+    answer = cursor.fetchone()
+    conn.close()
+
+    if answer:
+        bot.send_message(message.chat.id, answer[0])
+    else:
+        bot.send_message(message.chat.id, "Ответ на этот вопрос отсутствует.")
 
 # Обработка запроса "Помощь"
 @bot.message_handler(func=lambda message: message.text == "Помощь")
