@@ -14,24 +14,25 @@ DB_PASSWORD = os.getenv('DB_PASSWORD')
 def init_db():
     conn = sqlite3.connect('nestle_bot.db')
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            user_message TEXT,
-            admin_reply TEXT
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS faq (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question TEXT,
-            answer TEXT
-        )
-    """)
-    # Добавляем ответы на частые вопросы в базу данных
-    cursor.execute("INSERT INTO faq (question, answer) VALUES ('Какой пакет документов?', 'Для отгрузки товаров вам понадобятся накладная, товарный чек и сертификаты соответствия.')")
-    cursor.execute("INSERT INTO faq (question, answer) VALUES ('Где найти накладную на паллеты?', 'Накладная обычно находится в вашей учетной системе или может быть запрошена у вашего менеджера.')")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS user_requests (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
+                        user_message TEXT,
+                        admin_reply TEXT
+                    )""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS faq (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        question TEXT,
+                        answer TEXT
+                    )""")
+    
+    # Проверка, существуют ли уже записи, перед добавлением
+    cursor.execute("SELECT COUNT(*) FROM faq")
+    if cursor.fetchone()[0] == 0:
+        # Добавляем ответы на частые вопросы в базу данных
+        cursor.execute("INSERT INTO faq (question, answer) VALUES ('Какой пакет документов?', 'Для отгрузки товаров вам понадобятся накладная, товарный чек и сертификаты соответствия.')")
+        cursor.execute("INSERT INTO faq (question, answer) VALUES ('Где найти накладную на паллеты?', 'Накладная обычно находится в вашей учетной системе или может быть запрошена у вашего менеджера.')")
+    
     conn.commit()
     conn.close()
 
@@ -154,22 +155,25 @@ def reply_to_user(message):
         bot.send_message(message.chat.id, "Использование: /reply <id запроса> <сообщение>")
         return
 
-    request_id = int(parts[1])
-    admin_reply = parts[2]
-    save_reply(request_id, admin_reply)
+    try:
+        request_id = int(parts[1])
+        admin_reply = parts[2]
+        save_reply(request_id, admin_reply)
 
-    conn = sqlite3.connect('nestle_bot.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT user_id FROM user_requests WHERE id = ?", (request_id,))
-    result = cursor.fetchone()
-    conn.close()
+        conn = sqlite3.connect('nestle_bot.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM user_requests WHERE id = ?", (request_id,))
+        result = cursor.fetchone()
+        conn.close()
 
-    if result is None:
-        bot.send_message(message.chat.id, f"Запрос с ID {request_id} не найден.")
-    else:
-        user_id = result[0]
-        bot.send_message(user_id, f"Администратор ответил на ваш запрос (ID {request_id}):\n{admin_reply}")
-        bot.send_message(message.chat.id, f"Ответ отправлен пользователю {user_id}.")
+        if result is None:
+            bot.send_message(message.chat.id, f"Запрос с ID {request_id} не найден.")
+        else:
+            user_id = result[0]
+            bot.send_message(user_id, f"Администратор ответил на ваш запрос (ID {request_id}):\n{admin_reply}")
+            bot.send_message(message.chat.id, f"Ответ отправлен пользователю {user_id}.")
+    except ValueError:
+        bot.send_message(message.chat.id, "Неверный ID запроса.")
 
 # Команда для скачивания баз данных
 @bot.message_handler(commands=['data'])
