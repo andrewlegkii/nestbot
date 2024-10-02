@@ -8,6 +8,7 @@ load_dotenv()
 
 bot = telebot.TeleBot(os.getenv('TELEGRAM_BOT_TOKEN'))
 ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID'))
+DB_PASSWORD = os.getenv('DB_PASSWORD')
 
 # Инициализация базы данных
 def init_db():
@@ -51,6 +52,32 @@ def save_reply(request_id, admin_reply):
     cursor.execute("UPDATE user_requests SET admin_reply = ? WHERE id = ?", (admin_reply, request_id))
     conn.commit()
     conn.close()
+
+# Функция для скачивания базы данных
+def download_db(db_name):
+    conn = sqlite3.connect(db_name)
+    cursor = conn.cursor()
+
+    # Получаем все данные из таблицы user_requests
+    cursor.execute("SELECT * FROM user_requests")
+    user_requests_data = cursor.fetchall()
+
+    # Получаем все данные из таблицы faq
+    cursor.execute("SELECT * FROM faq")
+    faq_data = cursor.fetchall()
+
+    conn.close()
+
+    # Записываем данные в текстовые файлы
+    with open(f"{db_name.split('.')[0]}_requests.txt", "w", encoding="utf-8") as f:
+        for row in user_requests_data:
+            f.write(f"{row}\n")
+
+    with open(f"{db_name.split('.')[0]}_faq.txt", "w", encoding="utf-8") as f:
+        for row in faq_data:
+            f.write(f"{row}\n")
+
+    return f"{db_name.split('.')[0]}_requests.txt", f"{db_name.split('.')[0]}_faq.txt"
 
 # Команда для старта бота
 @bot.message_handler(commands=['start'])
@@ -143,6 +170,30 @@ def reply_to_user(message):
         user_id = result[0]
         bot.send_message(user_id, f"Администратор ответил на ваш запрос (ID {request_id}):\n{admin_reply}")
         bot.send_message(message.chat.id, f"Ответ отправлен пользователю {user_id}.")
+
+# Команда для скачивания баз данных
+@bot.message_handler(commands=['data'])
+def download_data(message):
+    if message.chat.id != ADMIN_CHAT_ID:
+        bot.send_message(message.chat.id, "Команда доступна только администратору.")
+        return
+
+    parts = message.text.split(' ')
+    if len(parts) != 2 or parts[1] != DB_PASSWORD:
+        bot.send_message(message.chat.id, "Неверный пароль. Попробуйте еще раз.")
+        return
+
+    # Скачивание баз данных
+    user_requests_file, faq_file = download_db('nestle_bot.db')
+
+    # Отправляем файлы администратору
+    with open(user_requests_file, 'rb') as f:
+        bot.send_document(ADMIN_CHAT_ID, f)
+    with open(faq_file, 'rb') as f:
+        bot.send_document(ADMIN_CHAT_ID, f)
+
+    # Уведомление об успешной отправке
+    bot.send_message(ADMIN_CHAT_ID, "Базы данных успешно скачаны.")
 
 # Инициализация базы данных при запуске
 init_db()
